@@ -1,9 +1,26 @@
-#Requires -Version 7.0
-
 param(
     [string]$Branch = 'main',
     [string]$RepoBase = 'https://raw.githubusercontent.com/agniuks/PSKit'
 )
+
+# If not running in PowerShell 7+, try to relaunch in pwsh
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        Write-Host "  Switching to PowerShell 7..." -ForegroundColor Yellow
+        $scriptUrl = "$RepoBase/$Branch/install.ps1"
+        & pwsh -NoProfile -Command "& { irm '$scriptUrl' | iex }"
+        return
+    } else {
+        Write-Host ""
+        Write-Host "PSKit Installer" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "  FAIL: PSKit requires PowerShell 7+. Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
+        Write-Host "  Install PowerShell 7: winget install Microsoft.PowerShell" -ForegroundColor Yellow
+        Write-Host ""
+        return
+    }
+}
 
 $ErrorActionPreference = 'Stop'
 
@@ -12,15 +29,6 @@ $script:PSKitThemesPath = Join-Path $script:PSKitDataPath 'themes'
 $script:PSKitModulePath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell\Modules\PSKit'
 $script:ThemeFileName   = 'pskit-simple.omp.json'
 $script:ProfileMarker   = 'PSKit'
-
-function Test-PowerShell7 {
-    if ($PSVersionTable.PSVersion.Major -lt 7) {
-        Write-Host "  FAIL: PSKit requires PowerShell 7+. Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
-        Write-Host "  Install: winget install Microsoft.PowerShell" -ForegroundColor Yellow
-        return $false
-    }
-    return $true
-}
 
 function Install-OhMyPosh {
     Write-Host "  Checking Oh My Posh..."
@@ -118,8 +126,6 @@ Initialize-PSKit
 Write-Host ""
 Write-Host "PSKit Installer" -ForegroundColor Cyan
 Write-Host ""
-
-if (-not (Test-PowerShell7)) { return }
 Write-Host "  OK: PowerShell $($PSVersionTable.PSVersion)" -ForegroundColor Green
 
 if (-not (Install-OhMyPosh)) { return }
