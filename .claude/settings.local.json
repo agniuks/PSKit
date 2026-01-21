@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/repos/PSKit status)",
+      "Bash(git -C /c/repos/PSKit diff)",
+      "Bash(git -C /c/repos/PSKit log --oneline -5)",
+      "Bash(git -C /c/repos/PSKit add install.ps1)",
+      "Bash(git -C /c/repos/PSKit commit -m \"$\\(cat <<''EOF''\nAuto-switch to PowerShell 7 when running installer from PS5\n\nInstead of failing with an error when run from Windows PowerShell 5.1,\nthe installer now automatically relaunches itself in pwsh if available.\nEOF\n\\)\")",
+      "Bash(git -C /c/repos/PSKit push)"
+    ]
+  }
+}
