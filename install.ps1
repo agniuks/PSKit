@@ -1,7 +1,9 @@
 param(
     [string]$Branch = 'main',
     [string]$RepoBase = 'https://raw.githubusercontent.com/agniuks/PSKit',
-    [switch]$SwitchedFromPS5
+    [switch]$SwitchedFromPS5,
+    [switch]$Local,
+    [string]$LocalPath = $PSScriptRoot
 )
 
 # If not running in PowerShell 7+, try to relaunch in pwsh
@@ -9,8 +11,13 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
     if ($pwsh) {
         Write-Host "  Switching to PowerShell 7..." -ForegroundColor Yellow
-        $scriptUrl = "$RepoBase/$Branch/install.ps1"
-        & pwsh -NoProfile -Command "& { `$script = irm '$scriptUrl'; `$sb = [scriptblock]::Create(`$script); & `$sb -SwitchedFromPS5 }"
+        if ($Local) {
+            $scriptPath = Join-Path $LocalPath 'install.ps1'
+            & pwsh -NoProfile -File $scriptPath -Local -LocalPath $LocalPath -SwitchedFromPS5
+        } else {
+            $scriptUrl = "$RepoBase/$Branch/install.ps1"
+            & pwsh -NoProfile -Command "& { `$script = irm '$scriptUrl'; `$sb = [scriptblock]::Create(`$script); & `$sb -SwitchedFromPS5 }"
+        }
         return
     } else {
         Write-Host ""
@@ -56,41 +63,53 @@ function Install-OhMyPosh {
 
 function Install-PSKitModule {
     Write-Host "  Installing module..."
-    
+
     if (Test-Path $script:PSKitModulePath) {
         Remove-Item $script:PSKitModulePath -Recurse -Force
     }
     New-Item -Path $script:PSKitModulePath -ItemType Directory -Force | Out-Null
-    
+
     try {
-        $baseUrl = "$RepoBase/$Branch/PSKit"
-        @('PSKit.psd1', 'PSKit.psm1') | ForEach-Object {
-            Invoke-RestMethod -Uri "$baseUrl/$_" -OutFile (Join-Path $script:PSKitModulePath $_)
+        if ($Local) {
+            $localModulePath = Join-Path $LocalPath 'PSKit'
+            @('PSKit.psd1', 'PSKit.psm1') | ForEach-Object {
+                Copy-Item -Path (Join-Path $localModulePath $_) -Destination (Join-Path $script:PSKitModulePath $_)
+            }
+        } else {
+            $baseUrl = "$RepoBase/$Branch/PSKit"
+            @('PSKit.psd1', 'PSKit.psm1') | ForEach-Object {
+                Invoke-RestMethod -Uri "$baseUrl/$_" -OutFile (Join-Path $script:PSKitModulePath $_)
+            }
         }
     } catch {
-        Write-Host "  FAIL: Could not download module files" -ForegroundColor Red
+        Write-Host "  FAIL: Could not $(if ($Local) { 'copy' } else { 'download' }) module files" -ForegroundColor Red
         throw
     }
-    
-    Write-Host "  OK: Module installed" -ForegroundColor Green
+
+    Write-Host "  OK: Module installed$(if ($Local) { ' (local)' })" -ForegroundColor Green
 }
 
 function Install-PSKitTheme {
     Write-Host "  Installing theme..."
-    
+
     if (-not (Test-Path $script:PSKitThemesPath)) {
         New-Item -Path $script:PSKitThemesPath -ItemType Directory -Force | Out-Null
     }
-    
+
     try {
-        $themeUrl = "$RepoBase/$Branch/themes/$script:ThemeFileName"
-        Invoke-RestMethod -Uri $themeUrl -OutFile (Join-Path $script:PSKitThemesPath $script:ThemeFileName)
+        if ($Local) {
+            $localThemePath = Join-Path $LocalPath "themes\$script:ThemeFileName"
+            Copy-Item -Path $localThemePath -Destination (Join-Path $script:PSKitThemesPath $script:ThemeFileName)
+        } else {
+            $themeUrl = "$RepoBase/$Branch/themes/$script:ThemeFileName"
+            Invoke-RestMethod -Uri $themeUrl -OutFile (Join-Path $script:PSKitThemesPath $script:ThemeFileName)
+        }
     } catch {
-        Write-Host "  FAIL: Could not download theme" -ForegroundColor Red
+        Write-Host "  FAIL: Could not $(if ($Local) { 'copy' } else { 'download' }) theme" -ForegroundColor Red
         throw
     }
-    
-    Write-Host "  OK: Theme installed" -ForegroundColor Green
+
+    Write-Host "  OK: Theme installed$(if ($Local) { ' (local)' })" -ForegroundColor Green
 }
 
 function Add-ProfileBlock {
@@ -174,9 +193,15 @@ if ($SwitchedFromPS5) {
     $response = Read-Host "  Set PowerShell 7 as your default terminal? (Y/n)"
     if ($response -eq '' -or $response -match '^[Yy]') {
         Set-WindowsTerminalDefaultProfile
+    } else {
+        Write-Host ""
+        Write-Host "  No problem. To use PSKit, open PowerShell 7 manually (search for 'pwsh')." -ForegroundColor Yellow
     }
+    Write-Host ""
+    Write-Host "Done! Restart your terminal." -ForegroundColor Green
+    Write-Host ""
+} else {
+    Write-Host ""
+    Write-Host "Done! Restart your terminal or run: . `$PROFILE" -ForegroundColor Green
+    Write-Host ""
 }
-
-Write-Host ""
-Write-Host "Done! Restart your terminal or run: . `$PROFILE" -ForegroundColor Green
-Write-Host ""

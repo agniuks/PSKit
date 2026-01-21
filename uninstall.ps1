@@ -18,7 +18,7 @@ function Remove-ProfileBlock {
     $content = Get-Content $profilePath -Raw
     if (-not $content) { return $false }
     
-    $pattern = "(?m)\r?\n?#region $script:ProfileMarker.*?#endregion $script:ProfileMarker\r?\n?"
+    $pattern = "(?ms)\r?\n?#region $script:ProfileMarker.*?#endregion $script:ProfileMarker\r?\n?"
     if ($content -match $pattern) {
         $newContent = $content -replace $pattern, ''
         Set-Content -Path $profilePath -Value $newContent.TrimEnd() -Encoding UTF8
