@@ -1,6 +1,7 @@
 param(
     [string]$Branch = 'main',
-    [string]$RepoBase = 'https://raw.githubusercontent.com/agniuks/PSKit'
+    [string]$RepoBase = 'https://raw.githubusercontent.com/agniuks/PSKit',
+    [switch]$SwitchedFromPS5
 )
 
 # If not running in PowerShell 7+, try to relaunch in pwsh
@@ -9,7 +10,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     if ($pwsh) {
         Write-Host "  Switching to PowerShell 7..." -ForegroundColor Yellow
         $scriptUrl = "$RepoBase/$Branch/install.ps1"
-        & pwsh -NoProfile -Command "& { irm '$scriptUrl' | iex }"
+        & pwsh -NoProfile -Command "& { `$script = irm '$scriptUrl'; `$sb = [scriptblock]::Create(`$script); & `$sb -SwitchedFromPS5 }"
         return
     } else {
         Write-Host ""
@@ -123,6 +124,38 @@ Initialize-PSKit
     Write-Host "  OK: Profile configured" -ForegroundColor Green
 }
 
+function Set-WindowsTerminalDefaultProfile {
+    $settingsPath = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json'
+
+    if (-not (Test-Path $settingsPath)) {
+        Write-Host "  Windows Terminal settings not found" -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+        $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
+
+        # Find PowerShell 7 profile
+        $ps7Profile = $settings.profiles.list | Where-Object {
+            $_.commandline -like '*pwsh*' -or $_.source -eq 'Windows.Terminal.PowershellCore'
+        } | Select-Object -First 1
+
+        if (-not $ps7Profile) {
+            Write-Host "  PowerShell 7 profile not found in Windows Terminal" -ForegroundColor Yellow
+            return $false
+        }
+
+        $settings.defaultProfile = $ps7Profile.guid
+        $settings | ConvertTo-Json -Depth 100 | Set-Content $settingsPath -Encoding UTF8
+
+        Write-Host "  OK: Windows Terminal default set to PowerShell 7" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-Host "  Failed to update Windows Terminal settings: $_" -ForegroundColor Yellow
+        return $false
+    }
+}
+
 Write-Host ""
 Write-Host "PSKit Installer" -ForegroundColor Cyan
 Write-Host ""
@@ -132,6 +165,17 @@ if (-not (Install-OhMyPosh)) { return }
 Install-PSKitModule
 Install-PSKitTheme
 Add-ProfileBlock
+
+if ($SwitchedFromPS5) {
+    Write-Host ""
+    Write-Host "  Your terminal defaulted to PowerShell 5." -ForegroundColor Yellow
+    Write-Host "  PSKit requires PowerShell 7 to work." -ForegroundColor Yellow
+    Write-Host ""
+    $response = Read-Host "  Set PowerShell 7 as your default terminal? (Y/n)"
+    if ($response -eq '' -or $response -match '^[Yy]') {
+        Set-WindowsTerminalDefaultProfile
+    }
+}
 
 Write-Host ""
 Write-Host "Done! Restart your terminal or run: . `$PROFILE" -ForegroundColor Green
